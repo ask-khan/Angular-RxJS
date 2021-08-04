@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 
-import { BehaviorSubject, combineLatest, merge, Observable, Subject, throwError } from 'rxjs';
-import { catchError, map, scan, shareReplay, tap } from 'rxjs/operators';
+import { BehaviorSubject, combineLatest, from, merge, Observable, Subject, throwError } from 'rxjs';
+import { catchError, filter, map, mergeMap, scan, shareReplay, switchMap, tap, toArray } from 'rxjs/operators';
 
 
 import { Product } from './product';
@@ -57,23 +57,41 @@ export class ProductService {
     )
 
 
+  selectedProductSupplier$ = this.selectedProduct$
+    .pipe(
+      filter( selectedProduct => Boolean(this.selectedProduct$) ),
+      switchMap(selectedProduct =>
+        from(selectedProduct.supplierIds)
+          .pipe(
+            mergeMap(supplierId => this.http.get<Supplier>(`${this.suppliersUrl}/${supplierId}`)),
+            toArray(),
+            tap( suppliers => console.log( 'product supplier', JSON.stringify( suppliers ) ) )
+          )
+      )
+    )
+
+
   private productInsertSubject = new Subject<Product>();
   productInsertAction$ = this.productInsertSubject.asObservable();
 
-  productWithAdd$ = merge( this.productWithCategory$, this.productInsertAction$ )
-      .pipe(
-        scan((acc: Product[], value: Product) => [... acc, value] )
-      );
+  productWithAdd$ = merge(this.productWithCategory$, this.productInsertAction$)
+    .pipe(
+      scan((acc: Product[], value: Product) => [...acc, value])
+    );
+    
+  // Get it all.
+  // selectedProductSupplier$ = combineLatest([this.selectedProduct$, this.supplierService.suppliers$]).pipe(map(([selectedProduct, suppliers]) =>
+  //   suppliers.filter(supplier => selectedProduct.supplierIds.includes(supplier.id))
+  // ));
 
 
+  selectedProductChanged(selectedProductId: number): void {
+    this.productSelectedSubject.next(selectedProductId);
+  }
 
-  selectedProductChanged( selectedProductId: number ): void {
-    this.productSelectedSubject.next( selectedProductId );
-  }  
-  
-  addProduct( newProduct?: Product ) {
+  addProduct(newProduct?: Product) {
     newProduct = newProduct || this.fakeProduct();
-    this.productInsertSubject.next( newProduct );
+    this.productInsertSubject.next(newProduct);
   }
 
   // getProducts(): Observable<Product[]> {
